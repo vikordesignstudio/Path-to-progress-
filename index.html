@@ -59,16 +59,20 @@
     <!-- Навігація -->
     <nav class="fixed w-full top-0 z-50 glass-card border-b-0">
         <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-2 font-bold text-xl tracking-tight">
+            <div class="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer hover:text-blue-400 transition" onclick="showPage('home')">
                 <i class="ph ph-trend-up text-blue-400 text-2xl"></i>
                 Path To Progress
             </div>
-            <div class="flex gap-4">
+            <div class="flex gap-4 items-center">
+                <button onclick="showPage('checklist')" class="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition">
+                    <i class="ph ph-check-square text-lg text-emerald-400"></i>
+                    <span class="hidden sm:inline">Чекліст</span>
+                </button>
                 <a href="https://productobyvmyts.vercel.app/" target="_blank" class="hidden sm:flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition">
                     <i class="ph ph-timer text-lg text-blue-400"></i>
                     Таймер спільноти
                 </a>
-                <a href="#join" class="bg-white text-slate-900 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-200 transition">
+                <a href="#join" onclick="showPage('home')" class="bg-white text-slate-900 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-200 transition">
                     Приєднатись
                 </a>
             </div>
@@ -335,6 +339,34 @@
         </div>
     </section>
 
+    <!-- Окрема сторінка: Чекліст (Схована за замовчуванням) -->
+    <section id="checklistPage" class="pt-32 pb-20 px-4 hidden min-h-screen flex-col items-center flex-grow">
+        <div class="w-full max-w-2xl mx-auto relative">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Чекліст робочого дня</h2>
+                <p class="text-slate-400 text-lg capitalize" id="currentDateDisplay"></p>
+            </div>
+
+            <div class="glass-card rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-xl">
+                <div id="checklistContainer" class="space-y-4 relative z-10">
+                    <!-- Блоки чекліста генеруватимуться через JS -->
+                </div>
+
+                <!-- Повідомлення про завершення (Анімація галочки) -->
+                <div id="successMessage" class="hidden absolute inset-0 bg-[#0f141e]/95 backdrop-blur-sm z-20 flex-col items-center justify-center text-center p-6 transition-all duration-500">
+                    <div class="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                        <i class="ph-bold ph-check text-6xl text-emerald-500"></i>
+                    </div>
+                    <h3 class="text-3xl font-bold text-white mb-2">Чудова робота!</h3>
+                    <p class="text-slate-300 text-lg mb-8">Ви успішно закрили робочий день. Всі блоки виконано.</p>
+                    <button onclick="resetChecklist()" class="px-6 py-3 border border-slate-600 hover:bg-slate-800 text-white rounded-xl font-medium transition">
+                        Скинути прогрес
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Футер / Заклик до дії -->
     <footer id="join" class="bg-[#0b0f17] border-t border-slate-800 pt-16 pb-8 text-center mt-auto">
         <div class="max-w-3xl mx-auto px-4">
@@ -358,5 +390,110 @@
         </div>
     </footer>
 
+    <!-- Логіка перемикання сторінок та чекліста -->
+    <script>
+        // --- 1. Навігація між сторінками ---
+        function showPage(pageId) {
+            const homeElements = document.querySelectorAll('main, section:not(#checklistPage), footer');
+            const checklistPage = document.getElementById('checklistPage');
+            
+            if (pageId === 'checklist') {
+                // Ховаємо головну сторінку, показуємо чекліст
+                homeElements.forEach(el => el.classList.add('hidden'));
+                checklistPage.classList.remove('hidden');
+                checklistPage.classList.add('flex'); // Повертаємо flex для правильного відображення
+                renderChecklist();
+            } else {
+                // Ховаємо чекліст, показуємо головну сторінку
+                homeElements.forEach(el => el.classList.remove('hidden'));
+                checklistPage.classList.add('hidden');
+                checklistPage.classList.remove('flex');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // --- 2. Логіка чекліста ---
+        const blocksData = [
+            { id: 'b1', time: '09:00 – 10:00', title: 'Робочий блок 1' },
+            { id: 'b2', time: '10:10 – 11:10', title: 'Робочий блок 2' },
+            { id: 'b3', time: '11:20 – 12:20', title: 'Робочий блок 3' },
+            { id: 'b4', time: '12:30 – 13:30', title: 'Робочий блок 4' },
+            { id: 'b5', time: '14:30 – 15:30', title: 'Робочий блок 5' },
+            { id: 'b6', time: '15:40 – 16:40', title: 'Робочий блок 6' },
+            { id: 'b7', time: '16:50 – 17:50', title: 'Робочий блок 7' },
+            { id: 'b8', time: '17:50 – 18:00', title: 'Завершення / підсумки' }
+        ];
+
+        // Ключ для LocalStorage, що унікальний для кожного дня
+        const getTodayKey = () => {
+            const today = new Date();
+            return `path_progress_${today.getFullYear()}_${today.getMonth() + 1}_${today.getDate()}`;
+        };
+
+        // Встановлення поточної дати
+        const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('currentDateDisplay').textContent = new Date().toLocaleDateString('uk-UA', dateOptions);
+
+        function getProgress() {
+            const saved = localStorage.getItem(getTodayKey());
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        function saveProgress(progress) {
+            localStorage.setItem(getTodayKey(), JSON.stringify(progress));
+        }
+
+        function toggleBlock(id) {
+            const progress = getProgress();
+            progress[id] = !progress[id]; // Змінюємо стан на протилежний
+            saveProgress(progress);
+            renderChecklist();
+        }
+
+        function resetChecklist() {
+            localStorage.removeItem(getTodayKey());
+            renderChecklist();
+        }
+
+        function renderChecklist() {
+            const container = document.getElementById('checklistContainer');
+            const successMsg = document.getElementById('successMessage');
+            const progress = getProgress();
+            
+            container.innerHTML = '';
+            let completedCount = 0;
+
+            blocksData.forEach(block => {
+                const isChecked = !!progress[block.id];
+                if (isChecked) completedCount++;
+
+                const blockEl = document.createElement('div');
+                blockEl.className = `flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer select-none group ${isChecked ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-slate-800/40 border-slate-700/60 hover:border-blue-500/50 hover:bg-slate-800'}`;
+                blockEl.onclick = () => toggleBlock(block.id);
+
+                blockEl.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <div class="w-7 h-7 rounded-md flex items-center justify-center border transition-all duration-300 ${isChecked ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'border-slate-500 group-hover:border-blue-400'}">
+                            ${isChecked ? '<i class="ph-bold ph-check text-white text-lg"></i>' : ''}
+                        </div>
+                        <div>
+                            <div class="font-mono text-sm ${isChecked ? 'text-emerald-400/80' : 'text-blue-300/80 group-hover:text-blue-300'}">${block.time}</div>
+                            <div class="font-bold text-lg transition-colors ${isChecked ? 'text-slate-500 line-through' : 'text-slate-200 group-hover:text-white'}">${block.title}</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(blockEl);
+            });
+
+            // Якщо всі блоки виконані — показуємо екран успіху
+            if (completedCount === blocksData.length && blocksData.length > 0) {
+                successMsg.classList.remove('hidden');
+                successMsg.classList.add('flex');
+            } else {
+                successMsg.classList.add('hidden');
+                successMsg.classList.remove('flex');
+            }
+        }
+    </script>
 </body>
 </html>
